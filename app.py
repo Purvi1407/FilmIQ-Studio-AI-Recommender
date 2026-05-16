@@ -127,7 +127,7 @@ st.sidebar.success("System Active ✅")
 def build_model():
 
     movies = pd.read_csv("tmdb_5000_movies.csv")
-    credits = pd.read_csv("tmdb_5000_credits.zip")
+    credits = pd.read_csv("tmdb_5000_credits.csv")
 
     movies = movies.merge(credits, on='title')
 
