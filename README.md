@@ -94,7 +94,7 @@ streamlit run app.py
 
 ## 👨‍💻 Author
 
-Built by **Your Name**
+Built by Purvi Lakhotia
 Internship Project – Machine Learning + Streamlit
 
 ---
@@ -104,10 +104,3 @@ Internship Project – Machine Learning + Streamlit
 If you like this project, give it a ⭐ on GitHub!
 
 ---
-
-If you want next upgrade, I can also:
-🔥 make your README look like Netflix landing page
-🔥 add GitHub badges (stars, deploy, Python, ML)
-🔥 write LinkedIn post that gets recruiters attention
-
-Just say 👍
