@@ -1,0 +1,21 @@
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Streamlit secrets
+.streamlit/secrets.toml
+
+# Cache files
+*.joblib
+
+# Zip files
+*.zip
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# OS files
+.DS_Storegit rm --cached
+Thumbs.db
