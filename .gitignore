@@ -7,6 +7,7 @@ __pycache__/
 
 # Cache files
 *.joblib
+!model_cache.joblib
 
 # Zip files
 *.zip
