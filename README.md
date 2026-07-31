@@ -7,7 +7,7 @@ It suggests movies based on similarity of **genres, cast, keywords, and story pa
 
 ## 🚀 Live Demo
 
-👉 [https://filmiq-studio-ai-recommender-9xujj94waeovdvk9fkbu9y.streamlit.app/](https://filmiq-studio-ai-recommender-9xujj94waeovdvk9fkbu9y.streamlit.app/)
+👉 [https://filmiq-studio-ai-recommender-gjb4cw2r5omhh6ddul25m9.streamlit.app/](https://filmiq-studio-ai-recommender-gjb4cw2r5omhh6ddul25m9.streamlit.app/)
 
 ---
 
