@@ -18,5 +18,5 @@ venv/
 env/
 
 # OS files
-.DS_Storegit rm --cached
+.DS_Store
 Thumbs.db
