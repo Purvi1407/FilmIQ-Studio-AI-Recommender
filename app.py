@@ -2,6 +2,21 @@
 # Place tmdb_5000_movies.csv and tmdb_5000_credits.csv in the same folder.
 # Also place .streamlit/config.toml and bg_image_data.py alongside this file.
 # Run: streamlit run app.py
+#
+# CHANGES IN THIS VERSION (resource-usage fixes):
+#   1. Posters are now fetched lazily, only for the small set of movies
+#      actually shown on screen (search results / mood grid / surprise
+#      pick), instead of prefetching all ~5000 posters at startup. This
+#      was the single biggest source of CPU + network load on first run
+#      and after every reboot (empty disk cache -> 5000 HTTP calls).
+#   2. Poster-fetch thread pool concurrency dropped from 20 -> 8 workers,
+#      since a high worker count competes harder for CPU when the app is
+#      throttled and doesn't meaningfully speed up small (<=20 item)
+#      batches anyway.
+#   3. Lazy poster lookups are wrapped in st.cache_data so repeat reruns
+#      (e.g. clicking the same movie twice, or a watchlist toggle
+#      triggering st.rerun()) don't re-fetch anything already fetched
+#      this session.
 
 import os
 import ast
@@ -87,7 +102,9 @@ MOODS = {
 # ---------------------------------------------------------------------------
 # Poster fetching — calls TMDB's API by movie id and caches results to
 # disk so we only ever hit the network once per movie, not once per
-# rerun. Without this, every script rerun would re-fetch 5000 posters.
+# rerun. Fetching is now done lazily (see get_poster_urls below) for
+# only the movies currently on screen, rather than for the whole
+# dataset up front.
 # ---------------------------------------------------------------------------
 def _load_poster_cache():
     if os.path.exists(POSTER_CACHE_FILE):
@@ -126,12 +143,14 @@ def _fetch_one_poster(session, movie_id):
         return movie_id, PLACEHOLDER_POSTER
 
 
-def fetch_posters(tmdb_ids, progress_callback=None, max_workers=20):
+def fetch_posters(tmdb_ids, max_workers=8):
     """
     Given a list of TMDB movie ids, returns {id: poster_url}.
-    Fetches missing ids concurrently (thread pool) instead of one at a
-    time — this is the main speed fix, since ~5000 sequential HTTP
-    round-trips is what made the first run painfully slow.
+    Fetches missing ids concurrently (small thread pool) instead of one
+    at a time. Kept deliberately low-concurrency (max_workers=8) since
+    this is now called with small batches (~5-20 ids at a time) rather
+    than the full ~5000-movie dataset, so raw throughput matters far
+    less than not hogging CPU on a throttled instance.
     Every value is guaranteed to be a real URL string — never None.
     """
     cache = _load_poster_cache()
@@ -148,16 +167,15 @@ def fetch_posters(tmdb_ids, progress_callback=None, max_workers=20):
     missing = [i for i in valid_ids if i not in cache]
 
     if not missing:
-        return cache
+        return {i: cache[i] for i in valid_ids}
 
     if not TMDB_API_KEY:
         for movie_id in missing:
             cache[movie_id] = PLACEHOLDER_POSTER
-        return cache
+        _save_poster_cache(cache)
+        return {i: cache[i] for i in valid_ids}
 
     session = requests.Session()
-    total = len(missing)
-    completed = 0
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {executor.submit(_fetch_one_poster, session, mid): mid for mid in missing}
@@ -165,18 +183,31 @@ def fetch_posters(tmdb_ids, progress_callback=None, max_workers=20):
         for future in as_completed(futures):
             movie_id, poster_url = future.result()
             cache[movie_id] = poster_url
-            completed += 1
-
-            if progress_callback and completed % 25 == 0:
-                progress_callback(completed / total)
-
-            # Save incrementally every ~250 completions so an interrupt
-            # doesn't lose all progress and force a full re-fetch.
-            if completed % 250 == 0:
-                _save_poster_cache(cache)
 
     _save_poster_cache(cache)
-    return cache
+    return {i: cache[i] for i in valid_ids}
+
+
+@st.cache_data(show_spinner=False)
+def get_poster_urls(movie_ids):
+    """
+    Lazy, per-request poster lookup for a small list of movie ids —
+    the ONLY place posters get fetched now. Cached by Streamlit per
+    unique (sorted) id tuple within the session, so re-rendering the
+    same set of movies (e.g. after a watchlist-toggle st.rerun()) is
+    instant instead of hitting TMDB or even the disk cache again.
+    movie_ids must be a tuple (hashable) for st.cache_data to key on it.
+    """
+    return fetch_posters(list(movie_ids))
+
+
+def posters_for(ids):
+    """Convenience wrapper: takes any iterable of ids, returns a dict
+    {id: poster_url} using the cached lazy lookup above."""
+    clean_ids = tuple(sorted({int(i) for i in ids if pd.notna(i)}))
+    if not clean_ids:
+        return {}
+    return get_poster_urls(clean_ids)
 
 
 # ---------------------------------------------------------------------------
@@ -224,42 +255,6 @@ def load_data():
     return df
 
 
-@st.cache_data(show_spinner=False)
-def attach_posters(df, _poster_signature):
-    """
-    Fetches/loads poster URLs for every movie in df and attaches them
-    as df["poster_url"]. Cached by Streamlit so this whole function
-    (including the cache-file read and the per-row .apply) only runs
-    once per session instead of on every single rerun/button click.
-    _poster_signature is a cheap proxy so the cache still invalidates
-    if the underlying id list changes.
-    """
-    poster_cache = fetch_posters(df["id"].tolist())
-    df = df.copy()
-    df["poster_url"] = df["id"].apply(
-        lambda i: poster_cache.get(int(i), PLACEHOLDER_POSTER) if pd.notna(i) else PLACEHOLDER_POSTER
-    )
-    return df
-
-
-def attach_posters_with_progress(df, _poster_signature, progress_bar):
-    """
-    Same as attach_posters but drives a live progress bar — used only
-    on the very first run (cold cache) since that's the only time the
-    fetch takes long enough to matter. Subsequent calls hit the
-    @st.cache_data-wrapped attach_posters above and return instantly.
-    """
-    def _update(frac):
-        progress_bar.progress(frac, text=f"Fetching posters from TMDB... {int(frac * 100)}%")
-
-    poster_cache = fetch_posters(df["id"].tolist(), progress_callback=_update)
-    df = df.copy()
-    df["poster_url"] = df["id"].apply(
-        lambda i: poster_cache.get(int(i), PLACEHOLDER_POSTER) if pd.notna(i) else PLACEHOLDER_POSTER
-    )
-    return df
-
-
 # ---------------------------------------------------------------------------
 # Model / embedding build — cached to disk so the heavy encode step
 # only ever runs once.
@@ -299,6 +294,9 @@ def build_model(_df, signature):
 
 
 def recommend(title, df, embeddings, knn, idx_map, n=10):
+    """Returns top-n similar movies. Poster URLs are NOT attached here —
+    callers should fetch posters afterward via posters_for() for just
+    the resulting rows, keeping poster fetching lazy."""
     key = title.lower()
     if key not in idx_map.index:
         return pd.DataFrame()
@@ -322,9 +320,12 @@ def recommend(title, df, embeddings, knn, idx_map, n=10):
             "Director": row["director"],
             "Genres": ", ".join(row["genres_list"][:4]),
             "Overview": str(row["overview"])[:250],
-            "Poster": row["poster_url"],
         })
-    return pd.DataFrame(rows)
+    recs = pd.DataFrame(rows)
+    if not recs.empty:
+        poster_map = posters_for(recs["id"].tolist())
+        recs["Poster"] = recs["id"].apply(lambda i: poster_map.get(int(i), PLACEHOLDER_POSTER))
+    return recs
 
 
 def filter_by_mood(df, mood_name):
@@ -604,7 +605,8 @@ def is_in_watchlist(movie_id):
 
 def render_movie_grid(rows_df, columns=5, show_similarity=False, key_prefix="grid"):
     """Renders a list of movie dicts/rows as poster cards in a grid,
-    each with an Add/Remove Watchlist toggle button."""
+    each with an Add/Remove Watchlist toggle button. Expects a "Poster"
+    column already populated by the caller (via posters_for())."""
     if rows_df.empty:
         st.info("No movies match right now — try a different mood or filter.")
         return
@@ -655,10 +657,10 @@ def render_movie_grid(rows_df, columns=5, show_similarity=False, key_prefix="gri
 
 
 # ---------------------------------------------------------------------------
-# Load data + posters + model
+# Load data + model (posters are NOT fetched here anymore — only for
+# the small number of movies actually rendered, per-tab, below)
 # ---------------------------------------------------------------------------
 df = load_data()
-poster_signature = (len(df), tuple(df["id"].head(20)))
 
 if not TMDB_API_KEY:
     st.warning(
@@ -666,16 +668,6 @@ if not TMDB_API_KEY:
         "Add your key to .streamlit/secrets.toml as TMDB_API_KEY = \"your_key\" and rerun.",
         icon="🔑",
     )
-
-if "posters_attached" not in st.session_state:
-    progress = st.progress(0.0, text="Fetching posters from TMDB (first run only)...")
-    df = attach_posters_with_progress(df, poster_signature, progress)
-    progress.empty()
-    st.session_state.posters_attached = True
-else:
-    # Cached by Streamlit — instant after the first run, no re-fetch,
-    # no re-apply over the dataframe.
-    df = attach_posters(df, poster_signature)
 
 signature = (len(df), hash(tuple(df["title_x"].head(20))))
 
@@ -718,7 +710,7 @@ with tab_search:
         top_n = st.slider("How many results", 5, 20, 10)
 
     if st.button("Recommend", type="primary"):
-        recs = recommend(movie, df, embeddings, knn, idx_map, top_n)
+        recs = recommend(movie, df, embeddings, knn, idx_map, top_n)  # posters fetched inside recommend()
         if recs.empty:
             st.warning(f"No match found for '{movie}'. Try a different title.")
         else:
@@ -773,10 +765,14 @@ with tab_mood:
         mood_df = filter_by_mood(df, mood_name)
         mood_df = mood_df.sort_values("vote_average", ascending=False).head(20)
         mood_df = mood_df.rename(columns={
-            "title_x": "Title", "vote_average": "Rating", "poster_url": "Poster"
+            "title_x": "Title", "vote_average": "Rating"
         })
         mood_df["Genres"] = mood_df["genres_list"].apply(lambda x: ", ".join(x[:4]))
         mood_df["Overview"] = mood_df["overview"].fillna("").astype(str).str.slice(0, 250)
+
+        # Only fetch posters for these 20 movies, not the full dataset.
+        poster_map = posters_for(mood_df["id"].tolist())
+        mood_df["Poster"] = mood_df["id"].apply(lambda i: poster_map.get(int(i), PLACEHOLDER_POSTER))
 
         render_movie_grid(mood_df, columns=5, show_similarity=False, key_prefix=f"mood_{mood_name}")
     else:
@@ -807,9 +803,12 @@ with tab_surprise:
 
     pick = st.session_state.surprise_pick
     if pick is not None:
+        # Fetch a poster for just this one movie.
+        poster_map = posters_for([pick.get("id")])
+        poster = poster_map.get(int(pick["id"]), PLACEHOLDER_POSTER) if pd.notna(pick.get("id")) else PLACEHOLDER_POSTER
+
         c1, c2 = st.columns([1, 2])
         with c1:
-            poster = pick["poster_url"] if pd.notna(pick.get("poster_url")) else PLACEHOLDER_POSTER
             st.image(poster, use_container_width=True)
         with c2:
             st.markdown(f"## {pick['title_x']}")
@@ -870,6 +869,8 @@ with tab_watchlist:
                 st.session_state.watchlist = {}
                 st.rerun()
 
+        # Posters here already came from search/mood/surprise (stored
+        # when the movie was added) — no extra fetch needed.
         watchlist_df = pd.DataFrame(watchlist.values())
         render_movie_grid(watchlist_df, columns=5, show_similarity=False, key_prefix="watchlist")
 
