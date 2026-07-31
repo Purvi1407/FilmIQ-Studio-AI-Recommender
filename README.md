@@ -1,73 +1,223 @@
-# 🎥 FilmIQ Studio - AI Movie Recommendation System
+# 🎥 FilmIQ Studio Pro - AI Movie Recommendation System
 
-An intelligent movie recommendation web app built using **Machine Learning** and **Streamlit**.
-It suggests movies based on similarity of **genres, cast, keywords, and story patterns**.
+An intelligent **AI-powered movie recommendation platform** built using **Sentence-BERT (SBERT), Machine Learning, NLP, and Streamlit**.
+
+FilmIQ Studio Pro uses **semantic understanding instead of simple keyword matching** to recommend movies. It generates contextual movie embeddings using **SBERT** and finds similar movies using **K-Nearest Neighbors (KNN)**.
+
+The application also integrates the **TMDB API** for movie posters and implements optimized caching strategies for faster performance.
 
 ---
 
 ## 🚀 Live Demo
 
-👉 [https://filmiq-studio-ai-recommender-6ulpglpdevsgydvbvufavn.streamlit.app/](https://filmiq-studio-ai-recommender-6ulpglpdevsgydvbvufavn.streamlit.app/)
+👉 https://filmiq-studio-ai-recommender-6ulpglpdevsgydvbvufavn.streamlit.app/
 
 ---
 
-## 📌 Features
+# ✨ Features
 
-* 🎬 Content-based movie recommendation system
-* 🤖 AI similarity using cosine similarity
-* 📊 Text vectorization using CountVectorizer
-* 🎯 Personalized recommendations
-* 🎨 Beautiful interactive Streamlit UI
-* ⚡ Fast response with caching optimization
+## 🤖 AI Recommendation Engine
+
+* Semantic movie similarity using **SBERT embeddings**
+* KNN-based nearest movie search
+* Context-aware recommendations using movie metadata
+
+## 🎬 Movie Discovery
+
+* Search movies and get personalized recommendations
+* Browse movies based on different moods:
+
+  * 😊 Feel Good
+  * 🔥 Intense
+  * 🕯️ Dark
+  * 😂 Funny
+  * 🗺️ Adventurous
+  * 🌙 Chill
+
+## 🎥 TMDB Integration
+
+* Dynamic movie poster fetching using TMDB API
+* Lazy poster loading (fetches only displayed movies)
+* Disk-based poster caching to reduce API calls
+
+## 📌 User Features
+
+* Add movies to personal watchlist
+* Remove saved movies
+* Export recommendations as CSV
+
+## 📊 Analytics Dashboard
+
+* Genre distribution analysis
+* Movie rating visualization
+* Dataset insights
+
+## ⚡ Performance Optimization
+
+* Streamlit caching for data and models
+* Cached SBERT embeddings
+* Optimized API requests using controlled thread pooling
 
 ---
 
-## 🧠 How It Works
+# 🧠 How It Works
 
-The system uses:
+FilmIQ Studio Pro follows a **semantic content-based filtering approach**.
 
-* Movie metadata (genres, cast, crew, keywords, overview)
-* Text preprocessing and feature engineering
-* Bag of Words model (CountVectorizer)
-* Cosine similarity for ranking movies
+Unlike traditional recommendation systems that depend only on keyword similarity, SBERT understands the meaning and context of movie descriptions.
 
-### Workflow:
+## Workflow
 
-1. Combine movie features into tags
-2. Convert text into vectors
-3. Compute similarity matrix
-4. Recommend top similar movies
+1. Load TMDB movie and credits datasets
+
+2. Extract important movie information:
+
+   * Movie overview
+   * Genres
+   * Cast
+   * Director
+   * Keywords
+
+3. Combine metadata into a single text representation
+
+4. Generate semantic embeddings using:
+
+```
+Sentence-BERT
+(paraphrase-MiniLM-L3-v2)
+```
+
+5. Store movie vectors
+
+6. Apply:
+
+```
+K-Nearest Neighbors
+(Cosine Distance)
+```
+
+to find the most similar movies
+
+7. Fetch movie posters from TMDB API
+
+8. Display recommendations through Streamlit UI
 
 ---
 
-## 🛠️ Tech Stack
+# 🏗️ System Architecture
+
+```
+              User Input
+                  |
+                  ↓
+        Movie Metadata Processing
+                  |
+                  ↓
+        SBERT Embedding Generation
+                  |
+                  ↓
+        Movie Vector Representation
+                  |
+                  ↓
+        KNN Similarity Search
+                  |
+                  ↓
+       Similar Movie Recommendations
+                  |
+                  ↓
+          TMDB Poster API
+                  |
+                  ↓
+        Streamlit Web Application
+```
+
+---
+
+# 🛠️ Tech Stack
+
+## Programming Language
 
 * Python 🐍
-* Streamlit ⚡
-* Pandas 📊
-* Scikit-learn 🤖
-* NLP (Text Processing)
+
+## Machine Learning / NLP
+
+* Sentence Transformers
+* SBERT
+* K-Nearest Neighbors
+* Semantic Embeddings
+* Natural Language Processing
+
+## Data Processing
+
+* Pandas
+* NumPy
+
+## Web Application
+
+* Streamlit
+
+## Visualization
+
+* Plotly
+
+## API Integration
+
+* TMDB API
+
+## Model Storage
+
+* Joblib
 
 ---
 
-## 📂 Dataset
+# 📂 Dataset
+
+The project uses:
 
 * TMDB 5000 Movies Dataset
 * TMDB 5000 Credits Dataset
 
+Features used:
+
+* Title
+* Overview
+* Genres
+* Cast
+* Director
+* Keywords
+* Ratings
+
 ---
 
-## 📦 Installation
+# 📦 Installation
 
 ```bash
-git clone https://github.com/yourusername/FilmIQ-Studio-AI-Recommender.git
-cd FilmIQ-Studio-AI-Recommender
+git clone https://github.com/yourusername/FilmIQ-Studio-Pro.git
+
+cd FilmIQ-Studio-Pro
+
 pip install -r requirements.txt
 ```
 
 ---
 
-## ▶️ Run the App
+# 🔑 TMDB API Setup
+
+Create a TMDB API key and add it inside:
+
+```
+.streamlit/secrets.toml
+```
+
+Example:
+
+```toml
+TMDB_API_KEY = "your_api_key_here"
+```
+
+---
+
+# ▶️ Run the Application
 
 ```bash
 streamlit run app.py
@@ -75,32 +225,33 @@ streamlit run app.py
 
 ---
 
-## 📸 Screenshots
+# 📸 Screenshots
 
-<img width="1898" height="868" alt="Screenshot 2026-05-16 200054" src="https://github.com/user-attachments/assets/b920b918-da4f-44db-8e47-c4eda31dd114" />
-<img width="1906" height="867" alt="Screenshot 2026-05-16 200113" src="https://github.com/user-attachments/assets/f42ffd5b-d9a2-4fae-b433-0352da9fe861" />
-
----
-
-## 🎯 Future Improvements
-
-* 🎥 Add movie posters using TMDB API
-* 🔍 Add search autocomplete
-* 🎬 Trailer preview integration
-* ⚡ Upgrade to FAISS for faster recommendations
-* 🌐 Deploy on Streamlit Cloud / Render
+(Add your latest FilmIQ Studio Pro screenshots here)
 
 ---
 
-## 👨‍💻 Author
+# 🔮 Future Improvements
 
-Built by Purvi Lakhotia
-Internship Project – Machine Learning + Streamlit
+* 🎞️ Add movie trailer integration
+* ⭐ Add user rating-based recommendations
+* 🧠 Implement hybrid recommendation system  
+  (Content + Collaborative Filtering)
+* ⚡ Replace KNN search with FAISS for large-scale similarity search
+* 🔍 Add intelligent movie search autocomplete
+* 👥 Add user profiles and recommendation history
+* 😊 Add facial emotion recognition to understand user mood and provide personalized movie recommendations based on detected emotions
 
 ---
 
-## ⭐ Show Support
+# 👨‍💻 Author
 
-If you like this project, give it a ⭐ on GitHub!
+Purvi Lakhotia
+
+Machine Learning + NLP Internship Project
 
 ---
+
+# ⭐ Show Support
+
+If you like this project, consider giving it a ⭐ on GitHub!
